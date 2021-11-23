@@ -39,6 +39,7 @@ namespace Double_Letter_Puzzle
 		int dependencyIndexMin;
 		int dependencyIndexMax;
 		string strThatChanged;
+		int indexCount;
 #endif
 
 		static Dictionary<string, List<string>> transitionTable = new Dictionary<string, List<string>>()
@@ -55,7 +56,7 @@ namespace Double_Letter_Puzzle
 
 		public Node(string input, Node parent = null, int index = 0
 #if DependencyBased
-			, int dependencyIndexMin = 0, int dependencyIndexMax = 0, string strThatChanged = null
+			, int dependencyIndexMin = 0, int dependencyIndexMax = short.MaxValue, string strThatChanged = null, int indexCount = 0
 #endif
 			)
 		{
@@ -76,11 +77,12 @@ namespace Double_Letter_Puzzle
 			this.dependencyIndexMin = dependencyIndexMin;
 			this.dependencyIndexMax = dependencyIndexMax;
 			this.strThatChanged = strThatChanged;
+			this.indexCount = indexCount;
 			Debug.Log($"(dependencyIndex = {dependencyIndexMin}, {dependencyIndexMax})");
 #endif
 		}
 
-		public void Spand(out bool result)
+		public int Spand(out bool result)
 		{
 			Tree.SpreadingTimes++;
 
@@ -91,7 +93,7 @@ namespace Double_Letter_Puzzle
 			{
 				result = true;
 #if StopWhenFindResult
-				return;
+				return -1;
 #endif
 			}
 
@@ -100,20 +102,14 @@ namespace Double_Letter_Puzzle
 
 #if DependencyBased
 
-			int front = 2; // 往前最長可能受影響的距離
-			int last = 2;  // 往後最長可能受影響的距離
+			const int front = 2; // 往前最長可能受影響的距離
+			const int last = 2;  // 往後最長可能受影響的距離
 
 			int threatMin, threatMax;
-			if (dependencyIndexMax - dependencyIndexMin <= 2)
-			{
-				threatMin = 0;
-				threatMax = value.Length;
-			}
-			else
-			{
-				threatMin = Math.Max(dependencyIndexMin - front, 0);
-				threatMax = Math.Min(value.Length, dependencyIndexMax + last);
-			}
+			
+			threatMin = Math.Max(dependencyIndexMin - front, 0);
+			threatMax = Math.Min(value.Length, dependencyIndexMax + last);
+			
 
 			for (int i = threatMin; i < threatMax; i++)
 #else
@@ -153,7 +149,7 @@ namespace Double_Letter_Puzzle
 										this,
 										counter
 #if DependencyBased
-										, i, i + keyword.Length, replacement
+										, i, i + keyword.Length, replacement, dependencyIndexMin + 1
 #endif
 									));
 							}
@@ -164,19 +160,23 @@ namespace Double_Letter_Puzzle
 
 			if (canMerge)
 			{
-				foreach (var child in Children)
+				for (int i = 0; i < Children.Count; i++)
 				{
+					var child = Children[i];
 					bool res;
-					child.Spand(out res);
+					int index = child.Spand(out res);
+					if (index != -1)
+						i = index;
 					if (res)
 					{
 						result = res || result;
 #if StopWhenFindResult
-						return;
+						return -1;
 #endif
 					}
 				}
 			}
+			return -1;
 		}
 
 		public List<Node> ToList(ref List<Node> list)
@@ -223,6 +223,11 @@ namespace Double_Letter_Puzzle
 #if Transposition
 		public static Dictionary<string, Node> Transposition = new Dictionary<string, Node>();
 #endif
+
+#if DependencyBased
+		public static Dictionary<int, string> DependencyBasedTable = new Dictionary<int, string>();
+#endif
+
 		public Tree(string input)
 		{
 			root = new Node(input);
