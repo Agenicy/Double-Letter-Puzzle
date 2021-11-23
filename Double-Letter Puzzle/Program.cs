@@ -1,5 +1,10 @@
-﻿using System;
+﻿//#define StopWhenFindResult
+#define Transposition
+
+using System;
 using System.Collections.Generic;
+
+
 
 namespace Double_Letter_Puzzle
 {
@@ -11,8 +16,10 @@ namespace Double_Letter_Puzzle
 			string quest = Console.ReadLine();
 
 			Tree tree = new Tree(quest);
-			tree.root.Spand();
+			bool result;
+			tree.root.Spand(out result);
 
+			Debug.Log(result);
 			Debug.Log(tree);
 		}
 	}
@@ -42,30 +49,53 @@ namespace Double_Letter_Puzzle
 			else
 				ID = $"{parent.ID}-{index}";
 			Debug.Log($"{ID} {value}");
+
+			Tree.Transposition[value] = this;
 		}
 
-		public void Spand()
+		public void Spand(out bool result)
 		{
+			result = false;
+
 			Debug.Log($"{value} Spanding");
+			if (value.Length == 1)
+			{
+				result = true;
+#if StopWhenFindResult
+				return;
+#endif
+			}
 
 			bool canMerge = false;
+			int counter = 0;
 			for (int i = 0; i < value.Length; i++)
 			{
 				foreach (var keyword in transitionTable.Keys)
 				{
-					int counter = 0;
 					if (i + keyword.Length <= value.Length)
 						if (value.Substring(i, keyword.Length) == keyword)
 						{
 							foreach (var replacement in transitionTable[keyword])
 							{
+								++counter;
+								string childValue = value.Substring(0, i) +
+										replacement +
+										value.Substring(i + keyword.Length);
+
+#if Transposition
+								if (Tree.Transposition.ContainsKey(childValue))
+								{
+									Debug.Log($"Pass {childValue}");
+									continue;
+								}
+#endif
+
 								Children.Add(
 									new Node(
-										value.Substring(0, i) +
-										replacement +
-										value.Substring(i + keyword.Length),
+										childValue
+										,
 										this,
-										counter++
+										counter
 									));
 							}
 							canMerge = true;
@@ -77,7 +107,15 @@ namespace Double_Letter_Puzzle
 			{
 				foreach (var child in Children)
 				{
-					child.Spand();
+					bool res;
+					child.Spand(out res);
+					if (res)
+					{
+						result = res || result;
+#if StopWhenFindResult
+						return;
+#endif
+					}
 				}
 			}
 		}
@@ -106,8 +144,9 @@ namespace Double_Letter_Puzzle
 	{
 		public Node root;
 
-		public Dictionary<string, Node> Transposition = new Dictionary<string, Node>();
-
+#if Transposition
+		public static Dictionary<string, Node> Transposition = new Dictionary<string, Node>();
+#endif
 		public Tree(string input)
 		{
 			root = new Node(input);
