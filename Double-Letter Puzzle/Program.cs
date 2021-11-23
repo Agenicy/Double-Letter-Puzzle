@@ -1,5 +1,5 @@
-﻿//#define StopWhenFindResult
-//#define Transposition
+﻿#define StopWhenFindResult
+#define Transposition
 #define DependencyBased
 
 using System;
@@ -20,7 +20,10 @@ namespace Double_Letter_Puzzle
 			bool result;
 			tree.root.Spand(out result);
 
-			Debug.Log(result);
+			Debug.Log($"Result: {result}");
+			Debug.Log($"Tree Spands {Tree.SpreadingTimes} times.");
+			Debug.Log($"Total generated {Node.nodeCount} nodes.");
+			Debug.Log("The tree graph is like:");
 			Debug.Log(tree);
 		}
 	}
@@ -29,9 +32,11 @@ namespace Double_Letter_Puzzle
 	{
 		string value;
 		string ID;
+		public static int nodeCount = 0;
 
 #if DependencyBased
-		int dependencyIndex;
+		int dependencyIndexMin;
+		int dependencyIndexMax;
 		string strThatChanged;
 #endif
 
@@ -44,49 +49,43 @@ namespace Double_Letter_Puzzle
 			{ "ee", new List<string>(){ "a", "d" } }
 		};
 
-#if DependencyBased
-		static Dictionary<string, List<string>> DependencyBasedTable = new Dictionary<string, List<string>>()
-		{
-			{ "a", new List<string>(){ "aa", "bb", "ee" } },
-			{ "b", new List<string>(){ "aa", "bb", "cc" } },
-			{ "c", new List<string>(){ "bb", "cc", "dd" } },
-			{ "d", new List<string>(){ "cc", "dd", "ee" } },
-			{ "e", new List<string>(){ "aa", "dd", "ee" } }
-		};
-#endif
-
 		public List<Node> Children = new List<Node>();
 		public bool isLeaf => Children.Count == 0;
 
 		public Node(string input, Node parent = null, int index = 0
 #if DependencyBased
-			, int dependencyIndex = 0, string strThatChanged = null
+			, int dependencyIndexMin = 0, int dependencyIndexMax = 0, string strThatChanged = null
 #endif
 			)
 		{
+			nodeCount++;
+
 			value = input;
 			if (parent is null)
 				ID = $"{index}";
 			else
 				ID = $"{parent.ID}-{index}";
-			Debug.Log($"{ID} {value}");
+			Debug.Log($"[{ID}]: {value}");
 
 #if Transposition
 			Tree.Transposition[value] = this;
 #endif
 
 #if DependencyBased
-			this.dependencyIndex = dependencyIndex;
+			this.dependencyIndexMin = dependencyIndexMin;
+			this.dependencyIndexMax = dependencyIndexMax;
 			this.strThatChanged = strThatChanged;
-			Debug.Log($"dependencyIndex = {dependencyIndex}");
+			Debug.Log($"(dependencyIndex = {dependencyIndexMin}, {dependencyIndexMax})");
 #endif
 		}
 
 		public void Spand(out bool result)
 		{
+			Tree.SpreadingTimes++;
+
 			result = false;
 
-			Debug.Log($"{value} Spanding");
+			Debug.Log($"[Spanding] {value}");
 			if (value.Length == 1)
 			{
 				result = true;
@@ -103,31 +102,36 @@ namespace Double_Letter_Puzzle
 			int front = 2; // 往前最長可能受影響的距離
 			int last = 2;  // 往後最長可能受影響的距離
 
-			for (int i = Math.Max(dependencyIndex - front, 0); i < Math.Min(value.Length, dependencyIndex + last); i++)
+			int threatMin, threatMax;
+			if (dependencyIndexMax - dependencyIndexMin <= 2)
+			{
+				threatMin = 0;
+				threatMax = value.Length;
+			}
+			else
+			{
+				threatMin = Math.Max(dependencyIndexMin - front, 0);
+				threatMax = Math.Min(value.Length, dependencyIndexMax + last);
+			}
+
+			for (int i = threatMin; i < threatMax; i++)
 #else
 			for (int i = 0; i < value.Length; i++)
 #endif
 			{
-#if DependencyBased
-				List<string> selectable = new List<string>();
-				if (strThatChanged != null)
-					selectable = DependencyBasedTable[strThatChanged];
-				else
-					foreach (var item in transitionTable.Keys)
-					{
-						selectable.Add(item);
-					}
-#else
-				var selectable = transitionTable.Keys;
-#endif
-
-				foreach (var keyword in selectable)
+				foreach (var keyword in transitionTable.Keys)
 				{
 					if (i + keyword.Length <= value.Length)
 						if (value.Substring(i, keyword.Length) == keyword)
 						{
 							foreach (var replacement in transitionTable[keyword])
 							{
+
+#if DependencyBased
+								if(strThatChanged != null)
+								if (!(replacement == strThatChanged || keyword.Contains(strThatChanged)))
+									continue;
+#endif
 								++counter;
 								string childValue = value.Substring(0, i) +
 										replacement +
@@ -136,7 +140,7 @@ namespace Double_Letter_Puzzle
 #if Transposition
 								if (Tree.Transposition.ContainsKey(childValue))
 								{
-									Debug.Log($"Pass {childValue}");
+									Debug.Log($"[Pass] {childValue}");
 									continue;
 								}
 #endif
@@ -148,7 +152,7 @@ namespace Double_Letter_Puzzle
 										this,
 										counter
 #if DependencyBased
-										, i, replacement
+										, i, i + keyword.Length, replacement
 #endif
 									));
 							}
@@ -197,6 +201,7 @@ namespace Double_Letter_Puzzle
 	class Tree
 	{
 		public Node root;
+		public static int SpreadingTimes = 0;
 
 #if Transposition
 		public static Dictionary<string, Node> Transposition = new Dictionary<string, Node>();
@@ -213,7 +218,7 @@ namespace Double_Letter_Puzzle
 			string ret = "";
 			foreach (var item in output)
 			{
-				ret += $"{item} /";
+				ret += $"{item} ";
 			}
 			return ret;
 		}
