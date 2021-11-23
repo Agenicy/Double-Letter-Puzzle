@@ -1,5 +1,6 @@
 ﻿//#define StopWhenFindResult
-#define Transposition
+//#define Transposition
+#define DependencyBased
 
 using System;
 using System.Collections.Generic;
@@ -29,19 +30,39 @@ namespace Double_Letter_Puzzle
 		string value;
 		string ID;
 
+#if DependencyBased
+		int dependencyIndex;
+		string strThatChanged;
+#endif
+
 		static Dictionary<string, List<string>> transitionTable = new Dictionary<string, List<string>>()
 		{
 			{ "aa", new List<string>(){ "b", "e" } },
 			{ "bb", new List<string>(){ "a", "c" } },
 			{ "cc", new List<string>(){ "b", "d" } },
 			{ "dd", new List<string>(){ "c", "e" } },
-			{ "ee", new List<string>(){ "d", "a" } }
+			{ "ee", new List<string>(){ "a", "d" } }
 		};
+
+#if DependencyBased
+		static Dictionary<string, List<string>> DependencyBasedTable = new Dictionary<string, List<string>>()
+		{
+			{ "a", new List<string>(){ "aa", "bb", "ee" } },
+			{ "b", new List<string>(){ "aa", "bb", "cc" } },
+			{ "c", new List<string>(){ "bb", "cc", "dd" } },
+			{ "d", new List<string>(){ "cc", "dd", "ee" } },
+			{ "e", new List<string>(){ "aa", "dd", "ee" } }
+		};
+#endif
 
 		public List<Node> Children = new List<Node>();
 		public bool isLeaf => Children.Count == 0;
 
-		public Node(string input, Node parent = null, int index = 0)
+		public Node(string input, Node parent = null, int index = 0
+#if DependencyBased
+			, int dependencyIndex = 0, string strThatChanged = null
+#endif
+			)
 		{
 			value = input;
 			if (parent is null)
@@ -50,7 +71,15 @@ namespace Double_Letter_Puzzle
 				ID = $"{parent.ID}-{index}";
 			Debug.Log($"{ID} {value}");
 
+#if Transposition
 			Tree.Transposition[value] = this;
+#endif
+
+#if DependencyBased
+			this.dependencyIndex = dependencyIndex;
+			this.strThatChanged = strThatChanged;
+			Debug.Log($"dependencyIndex = {dependencyIndex}");
+#endif
 		}
 
 		public void Spand(out bool result)
@@ -68,9 +97,31 @@ namespace Double_Letter_Puzzle
 
 			bool canMerge = false;
 			int counter = 0;
+
+#if DependencyBased
+
+			int front = 2; // 往前最長可能受影響的距離
+			int last = 2;  // 往後最長可能受影響的距離
+
+			for (int i = Math.Max(dependencyIndex - front, 0); i < Math.Min(value.Length, dependencyIndex + last); i++)
+#else
 			for (int i = 0; i < value.Length; i++)
+#endif
 			{
-				foreach (var keyword in transitionTable.Keys)
+#if DependencyBased
+				List<string> selectable = new List<string>();
+				if (strThatChanged != null)
+					selectable = DependencyBasedTable[strThatChanged];
+				else
+					foreach (var item in transitionTable.Keys)
+					{
+						selectable.Add(item);
+					}
+#else
+				var selectable = transitionTable.Keys;
+#endif
+
+				foreach (var keyword in selectable)
 				{
 					if (i + keyword.Length <= value.Length)
 						if (value.Substring(i, keyword.Length) == keyword)
@@ -96,6 +147,9 @@ namespace Double_Letter_Puzzle
 										,
 										this,
 										counter
+#if DependencyBased
+										, i, replacement
+#endif
 									));
 							}
 							canMerge = true;
