@@ -25,6 +25,7 @@ namespace Double_Letter_Puzzle
 			Debug.Log($"Total generated {Node.nodeCount} nodes.");
 			Debug.Log("The tree graph is like:");
 			Debug.Log(tree);
+			Debug.Log(tree.TGF());
 		}
 	}
 
@@ -128,9 +129,9 @@ namespace Double_Letter_Puzzle
 							{
 
 #if DependencyBased
-								if(strThatChanged != null)
-								if (!(replacement == strThatChanged || keyword.Contains(strThatChanged)))
-									continue;
+								if (strThatChanged != null)
+									if (!(replacement == strThatChanged || keyword.Contains(strThatChanged)))
+										continue;
 #endif
 								++counter;
 								string childValue = value.Substring(0, i) +
@@ -192,6 +193,22 @@ namespace Double_Letter_Puzzle
 			return list;
 		}
 
+		public void TGF(string parentID, ref string node, ref string path)
+		{
+			node += $"{ID} {value}\n";
+
+			if (parentID != "")
+				path += $"{parentID} {ID}\n";
+
+			if (!isLeaf)
+			{
+				foreach (var child in Children)
+				{
+					child.TGF(ID, ref node, ref path);
+				}
+			}
+		}
+
 		public override string ToString()
 		{
 			return $"{ID} {value}";
@@ -218,9 +235,19 @@ namespace Double_Letter_Puzzle
 			string ret = "";
 			foreach (var item in output)
 			{
-				ret += $"{item} ";
+				ret += $"{item}\n";
 			}
 			return ret;
+		}
+
+		public string TGF()
+		{
+			string nodes = "";
+			string paths = "";
+
+			root.TGF("", ref nodes, ref paths);
+
+			return nodes + "#\n" + paths;
 		}
 	}
 
