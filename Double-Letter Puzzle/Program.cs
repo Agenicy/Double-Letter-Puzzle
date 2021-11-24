@@ -18,7 +18,12 @@ namespace Double_Letter_Puzzle
 
 			Tree tree = new Tree(quest);
 			bool result;
+
+#if DependencyBased
+			result = tree.Dependency(0) == quest.Length;
+#else
 			tree.root.Spand(out result);
+#endif
 
 			Debug.Log($"Result: {result}");
 			Debug.Log($"Tree Spands {Tree.SpreadingTimes} times.");
@@ -31,15 +36,15 @@ namespace Double_Letter_Puzzle
 
 	class Node
 	{
-		string value;
+		public string value;
 		string ID;
 		public static int nodeCount = 0;
 
 #if DependencyBased
-		int dependencyIndexMin;
-		int dependencyIndexMax;
-		string strThatChanged;
-		int indexCount;
+		public int dependencyIndexMin;
+		public int dependencyIndexMax;
+		public string strThatChanged;
+		public int indexCount;
 #endif
 
 		static Dictionary<string, List<string>> transitionTable = new Dictionary<string, List<string>>()
@@ -78,7 +83,11 @@ namespace Double_Letter_Puzzle
 			this.dependencyIndexMax = dependencyIndexMax;
 			this.strThatChanged = strThatChanged;
 			this.indexCount = indexCount;
-			Debug.Log($"(dependencyIndex = {dependencyIndexMin}, {dependencyIndexMax})");
+			Debug.Log($"(dependencyIndex = {dependencyIndexMin}, {indexCount})");
+
+			if (!Tree.DependencyBasedTable.ContainsKey(indexCount))
+				Tree.DependencyBasedTable[indexCount] = new List<Node>();
+			Tree.DependencyBasedTable[indexCount].Add(this);
 #endif
 		}
 
@@ -106,10 +115,10 @@ namespace Double_Letter_Puzzle
 			const int last = 2;  // 往後最長可能受影響的距離
 
 			int threatMin, threatMax;
-			
+
 			threatMin = Math.Max(dependencyIndexMin - front, 0);
 			threatMax = Math.Min(value.Length, dependencyIndexMax + last);
-			
+
 
 			for (int i = threatMin; i < threatMax; i++)
 #else
@@ -149,7 +158,7 @@ namespace Double_Letter_Puzzle
 										this,
 										counter
 #if DependencyBased
-										, i, i + keyword.Length, replacement, dependencyIndexMin + 1
+										, i, i + keyword.Length, replacement, i + 1
 #endif
 									));
 							}
@@ -158,6 +167,10 @@ namespace Double_Letter_Puzzle
 				}
 			}
 
+
+#if DependencyBased
+#else
+
 			if (canMerge)
 			{
 				for (int i = 0; i < Children.Count; i++)
@@ -165,8 +178,6 @@ namespace Double_Letter_Puzzle
 					var child = Children[i];
 					bool res;
 					int index = child.Spand(out res);
-					if (index != -1)
-						i = index;
 					if (res)
 					{
 						result = res || result;
@@ -176,8 +187,12 @@ namespace Double_Letter_Puzzle
 					}
 				}
 			}
+#endif
+
+
 			return -1;
 		}
+
 
 		public List<Node> ToList(ref List<Node> list)
 		{
@@ -225,7 +240,7 @@ namespace Double_Letter_Puzzle
 #endif
 
 #if DependencyBased
-		public static Dictionary<int, string> DependencyBasedTable = new Dictionary<int, string>();
+		public static Dictionary<int, List<Node>> DependencyBasedTable = new Dictionary<int, List<Node>>();
 #endif
 
 		public Tree(string input)
@@ -254,6 +269,70 @@ namespace Double_Letter_Puzzle
 
 			return nodes + "#\n" + paths;
 		}
+
+
+
+#if DependencyBased
+		/// <summary>
+		/// 在指定點開始展開1層
+		/// </summary>
+		/// <param name="index">指定點</param>
+		/// <returns></returns>
+		public int Dependency(int index)
+		{
+			Node parent;
+			if (DependencyBasedTable.Count == 0)
+				parent = root;
+			else
+			{
+				parent = DependencyBasedTable[index][0];
+				DependencyBasedTable[index].RemoveAt(0); // deque
+			}
+
+			bool end = false;
+			int next = parent.Spand(out end);
+
+			if (end)
+				return next;
+
+			foreach (var child in parent.Children)
+				Combination(child);
+
+			return 0;
+		}
+
+		public int Combination(Node parent)
+		{
+			int last = parent.indexCount;
+
+			int index = 0;
+			Queue<Node> queue = new Queue<Node>();
+			if(DependencyBasedTable.ContainsKey(last))
+			foreach (Node merge in DependencyBasedTable[last])
+			{
+				if (merge.strThatChanged == parent.strThatChanged)
+				{
+					Node newNode = new Node(
+							parent.value.Substring(0, parent.indexCount) + merge.value.Substring(parent.indexCount),
+							parent,
+							index++,
+							parent.dependencyIndexMin,
+							merge.dependencyIndexMax,
+							parent.strThatChanged,
+							parent.indexCount + 1
+					);
+
+					parent.Children.Add(newNode);
+					merge.Children.Add(newNode);
+					queue.Enqueue(newNode);
+
+					newNode.Spand(out bool _);
+				}
+			}
+			return 0;
+		}
+#endif
+
 	}
 
 	class Debug
